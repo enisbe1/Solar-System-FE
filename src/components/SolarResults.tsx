@@ -1,7 +1,7 @@
 'use client';
 
 import { SolarEstimate, SolarData } from '@/types/solar';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line} from 'recharts';
 import { Sun, Zap, Leaf, DollarSign, MapPin, Calculator } from 'lucide-react';
 
 interface SolarResultsProps {
@@ -157,27 +157,27 @@ export default function SolarResults({ estimate, solarData, systemArea }: SolarR
           <div className="space-y-4">
             <div className="flex justify-between items-center py-3 border-b border-gray-100">
               <span className="text-gray-600">Available Area</span>
-              <span className="font-semibold">{systemArea} m²</span>
+              <span className="font-semibold text-gray-900">{systemArea} m²</span>
             </div>
             <div className="flex justify-between items-center py-3 border-b border-gray-100">
               <span className="text-gray-600">Number of Panels</span>
-              <span className="font-semibold">{estimate.numberOfPanels}</span>
+              <span className="font-semibold text-gray-900">{estimate.numberOfPanels}</span>
             </div>
             <div className="flex justify-between items-center py-3 border-b border-gray-100">
               <span className="text-gray-600">System Capacity</span>
-              <span className="font-semibold">{estimate.systemCapacityKw} kW</span>
+              <span className="font-semibold text-gray-900">{estimate.systemCapacityKw} kW</span>
             </div>
             <div className="flex justify-between items-center py-3 border-b border-gray-100">
               <span className="text-gray-600">Optimal Tilt Angle</span>
-              <span className="font-semibold">{Math.round(solarData.optimalTilt)}°</span>
+              <span className="font-semibold text-gray-900">{Math.round(solarData.optimalTilt)}°</span>
             </div>
             <div className="flex justify-between items-center py-3 border-b border-gray-100">
               <span className="text-gray-600">Optimal Azimuth</span>
-              <span className="font-semibold">{Math.round(solarData.optimalAzimuth)}°</span>
+              <span className="font-semibold text-gray-900">{Math.round(solarData.optimalAzimuth)}°</span>
             </div>
             <div className="flex justify-between items-center py-3">
               <span className="text-gray-600">Solar Irradiance</span>
-              <span className="font-semibold">{Math.round(solarData.yearlyIrradiance)} kWh/m²/year</span>
+              <span className="font-semibold text-gray-900">{Math.round(solarData.yearlyIrradiance)} kWh/m²/year</span>
             </div>
           </div>
         </div>

@@ -134,6 +134,7 @@ export default function GoogleMap({
             const lat = place.geometry.location.lat();
             const lng = place.geometry.location.lng();
 
+            
             // Update map and marker
             if (place.geometry.viewport) {
               mapInstance.fitBounds(place.geometry.viewport);
@@ -200,7 +201,7 @@ export default function GoogleMap({
           ref={searchInputRef}
           type="text"
           placeholder="Search for an address..."
-          className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+          className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-gray-900 placeholder:text-gray-500"
         />
       </div>
 

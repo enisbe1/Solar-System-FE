@@ -9,6 +9,25 @@ const PVGIS_API_URL = 'https://re.jrc.ec.europa.eu/api/v5_2/PVcalc';
 const NREL_API_URL = 'https://developer.nrel.gov/api/solar/solar_resource/v1.json';
 
 interface PVGISResponse {
+  meta: {
+    'inputs': {
+      'location': {
+        'latitude': number;
+        'longitude': number;
+        'elevation': number;
+      };
+      'mounting_system': {
+        'fixed': {
+          'slope': {
+            'value': number; // optimal tilt
+          };
+          'azimuth': {
+            'value': number; // optimal azimuth
+          };
+        };
+      };
+    };
+  };
   outputs: {
     totals: {
       fixed: {
@@ -45,6 +64,18 @@ interface PVGISResponse {
       };
     };
   };
+  inputs: {
+    mounting_system: {
+      fixed: {
+        slope: {
+          value: number; // optimal tilt
+        };
+        azimuth: {
+          value: number; // optimal azimuth
+        };
+      };
+    };
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -145,9 +176,10 @@ async function fetchPVGISData(lat: number, lng: number): Promise<SolarData> {
       throw new Error('Invalid PVGIS response format');
     }
 
+
     const totals = data.outputs.totals.fixed;
     const monthly = data.outputs.monthly.fixed;
-    const meta = data.outputs.meta.inputs;
+    const meta = data.inputs;
 
     // Extract monthly irradiance data
     const monthlyIrradiance = monthly.map(month => month['H(i)_m']);

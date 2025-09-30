@@ -59,6 +59,7 @@ export default function Home() {
     setError(null);
 
     try {
+      console.log('selectedLocation', selectedLocation);
       // 1. Fetch solar irradiance data
       const solarResponse = await axios.get('/api/solar', {
         params: {
@@ -69,6 +70,7 @@ export default function Home() {
       });
 
       const fetchedSolarData: SolarData = solarResponse.data;
+      console.log('fetchedSolarData', fetchedSolarData);
       setSolarData(fetchedSolarData);
 
       // 2. Calculate solar estimate
@@ -183,7 +185,7 @@ export default function Home() {
                         ...prev,
                         area: parseFloat(e.target.value) || 0
                       }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                       placeholder="e.g., 100"
                     />
                     <p className="text-xs text-gray-500 mt-1">
@@ -206,7 +208,7 @@ export default function Home() {
                         ...prev,
                         panelEfficiency: parseFloat(e.target.value) || 22
                       }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       Modern panels: 20-22% (default: 22%)
@@ -228,7 +230,7 @@ export default function Home() {
                         ...prev,
                         systemLosses: parseFloat(e.target.value) || 14
                       }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       Wiring, inverter, dirt losses (default: 14%)
@@ -250,7 +252,7 @@ export default function Home() {
                           ...prev,
                           panelPower: parseFloat(e.target.value) || 400
                         }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                       />
                     </div>
                     
@@ -268,7 +270,7 @@ export default function Home() {
                           ...prev,
                           panelArea: parseFloat(e.target.value) || 2.0
                         }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
                       />
                     </div>
                   </div>
@@ -333,7 +335,7 @@ export default function Home() {
                 />
               </ClientOnly>
             )}
-          </div>
+        </div>
         )}
       </main>
 
