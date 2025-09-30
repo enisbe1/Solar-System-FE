@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
 import { Location } from '@/types/solar';
 
+// Global flag to ensure setOptions is only called once
+let isGoogleMapsConfigured = false;
+
 interface GoogleMapProps {
   onLocationSelect: (location: Location) => void;
   selectedLocation?: Location | null;
@@ -34,8 +37,11 @@ export default function GoogleMap({
       if (!mapRef.current) return;
 
       try {
-        // Set Google Maps API key (only once)
-        setOptions({ key: apiKey });
+        // Set Google Maps API key (only once globally)
+        if (!isGoogleMapsConfigured) {
+          setOptions({ key: apiKey });
+          isGoogleMapsConfigured = true;
+        }
 
         // Load the maps library
         await importLibrary('maps');
