@@ -6,10 +6,14 @@ export interface Location {
 
 export interface SolarData {
   location: Location;
-  yearlyIrradiance: number; // kWh/m²/year
+  yearlyIrradiance: number; // kWh/m²/year (H(i)_y) — charts & fallback calc
   optimalTilt: number; // degrees
   optimalAzimuth: number; // degrees
-  monthlyData?: number[]; // Monthly irradiance values
+  monthlyData?: number[]; // Monthly irradiance H(i)_m (kWh/m²)
+  /** PVGIS modeled yield per kWp (E_y). Preferred for energy estimates. */
+  yearlyYieldKwhPerKwp?: number;
+  /** PVGIS monthly yield per kWp (E_m), 12 values. */
+  monthlyYieldKwhPerKwp?: number[];
 }
 
 export interface SystemSpecs {

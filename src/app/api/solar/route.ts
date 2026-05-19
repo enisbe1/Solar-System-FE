@@ -181,18 +181,17 @@ async function fetchPVGISData(lat: number, lng: number): Promise<SolarData> {
     const monthly = data.outputs.monthly.fixed;
     const meta = data.inputs;
 
-    // Extract monthly irradiance data
-    const monthlyIrradiance = monthly.map(month => month['H(i)_m']);
+    const monthlyIrradiance = monthly.map((month) => month['H(i)_m']);
+    const monthlyYield = monthly.map((month) => month['E_m']);
 
     const solarData: SolarData = {
-      location: {
-        lat,
-        lng: lng,
-      },
-      yearlyIrradiance: totals['H(i)_y'], // kWh/m²/year
+      location: { lat, lng },
+      yearlyIrradiance: totals['H(i)_y'],
+      yearlyYieldKwhPerKwp: totals['E_y'],
+      monthlyData: monthlyIrradiance,
+      monthlyYieldKwhPerKwp: monthlyYield,
       optimalTilt: meta.mounting_system.fixed.slope.value,
       optimalAzimuth: meta.mounting_system.fixed.azimuth.value,
-      monthlyData: monthlyIrradiance,
     };
 
     return solarData;

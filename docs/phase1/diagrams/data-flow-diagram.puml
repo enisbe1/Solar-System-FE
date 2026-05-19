@@ -1,0 +1,90 @@
+@startuml Data Flow Diagram
+!theme plain
+
+title Data Flow Diagram - Solar Energy Calculator
+
+actor User
+
+rectangle "User Interface Layer" {
+    rectangle "Home Page" as HomePage
+    rectangle "Google Map Component" as MapComp
+    rectangle "System Specs Form" as SpecsForm
+    rectangle "Solar Results Component" as ResultsComp
+}
+
+rectangle "API Layer" {
+    rectangle "/api/solar" as SolarAPI
+    rectangle "/api/calculate" as CalcAPI
+}
+
+rectangle "External Services" {
+    database "PVGIS API" as PVGIS
+    database "Google Maps API" as GMaps
+}
+
+User --> HomePage : 1. Loads application
+
+HomePage --> MapComp : 2. Renders map interface
+
+MapComp --> GMaps : 3. Fetches map tiles\nand location data
+
+GMaps --> MapComp : 4. Returns map imagery
+
+User --> MapComp : 5. Selects location\n(click/search/drag)
+
+MapComp --> GMaps : 6. Reverse geocode\ncoordinates
+
+GMaps --> MapComp : 7. Returns address
+
+MapComp --> HomePage : 8. Sends Location\n{lat, lng, address}
+
+User --> SpecsForm : 9. Enters system specs\n(area, efficiency, etc.)
+
+SpecsForm --> HomePage : 10. Sends SystemSpecs\n{area, panelEfficiency, ...}
+
+User --> HomePage : 11. Clicks "Calculate"
+
+HomePage --> SolarAPI : 12. GET /api/solar\n?lat={lat}&lng={lng}
+
+SolarAPI --> PVGIS : 13. Requests irradiance data\nwith parameters
+
+PVGIS --> SolarAPI : 14. Returns SolarData\n{yearlyIrradiance, monthlyData,\noptimalTilt, optimalAzimuth}
+
+SolarAPI --> HomePage : 15. Returns formatted\nSolarData (JSON)
+
+HomePage --> CalcAPI : 16. POST /api/calculate\n{solarData, systemSpecs}
+
+CalcAPI --> CalcAPI : 17. Calculates:\n- Energy production\n- Number of panels\n- CO₂ savings\n- Financial metrics
+
+CalcAPI --> HomePage : 18. Returns SolarEstimate\n{yearlyEnergyKwh, numberOfPanels,\nco2SavingsKg, financialSavings, ...}
+
+HomePage --> ResultsComp : 19. Passes estimate\nand solarData
+
+ResultsComp --> User : 20. Displays results,\ncharts, and metrics
+
+note right of SolarAPI
+  Error Handling:
+  - Validates coordinates
+  - 10s timeout on PVGIS
+  - Fallback estimation
+  - Returns consistent format
+end note
+
+note right of CalcAPI
+  Calculations:
+  - Energy = Area × Irradiance × 
+    Efficiency × SystemEfficiency
+  - Panels = floor(Area / PanelArea)
+  - CO₂ = Energy × Regional Factor
+  - Savings = Energy × Electricity Rate
+end note
+
+note left of MapComp
+  User Interactions:
+  - Address search (autocomplete)
+  - Click on map to place marker
+  - Drag marker to new position
+  - All update location state
+end note
+
+@enduml

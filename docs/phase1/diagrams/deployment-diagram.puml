@@ -1,0 +1,81 @@
+@startuml Deployment Diagram
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Deployment.puml
+
+title Deployment Diagram - Solar Energy Calculator
+
+Deployment_Node(userDevice, "User Device", "Desktop, Tablet, or Mobile") {
+    Deployment_Node(browser, "Web Browser", "Chrome, Firefox, Safari, Edge") {
+        Container(clientApp, "Client Application", "React SPA", "Rendered user interface with interactive components")
+    }
+}
+
+Deployment_Node(vercel, "Vercel Cloud Platform", "Serverless Infrastructure") {
+    Deployment_Node(cdn, "Global CDN", "Edge Network") {
+        Container(staticAssets, "Static Assets", "HTML, CSS, JS, Images", "Cached and served from edge locations")
+    }
+    
+    Deployment_Node(serverless, "Serverless Functions", "Node.js Runtime") {
+        Container(apiRoutes, "API Routes", "Next.js API Handlers", "Solar data fetching and calculation endpoints")
+    }
+    
+    Deployment_Node(buildSystem, "Build System", "Next.js Compiler") {
+        Container(buildOutput, "Optimized Build", "Static & Server bundles", "Production-optimized code")
+    }
+}
+
+Deployment_Node(googleCloud, "Google Cloud Platform") {
+    Container(googleMapsService, "Google Maps API", "REST & JavaScript API", "Map tiles, geocoding, places")
+}
+
+Deployment_Node(euCommission, "European Commission Infrastructure") {
+    Container(pvgisService, "PVGIS API", "REST API", "Solar irradiance database")
+}
+
+Deployment_Node(github, "GitHub", "Version Control") {
+    Container(repository, "Git Repository", "Source Code", "Public repository with complete history")
+}
+
+Rel(clientApp, staticAssets, "Requests", "HTTPS")
+Rel(clientApp, apiRoutes, "API Calls", "HTTPS / JSON")
+Rel(clientApp, googleMapsService, "Loads map library", "HTTPS")
+
+Rel(apiRoutes, pvgisService, "Fetches solar data", "HTTPS / JSON")
+Rel(apiRoutes, googleMapsService, "Geocoding requests", "HTTPS")
+
+Rel(github, buildSystem, "Triggers deployment", "Git Push / Webhook")
+Rel(buildSystem, cdn, "Deploys static assets")
+Rel(buildSystem, serverless, "Deploys API functions")
+
+note right of cdn
+  - Global edge locations
+  - Automatic HTTPS/SSL
+  - Caching static content
+  - DDoS protection
+end note
+
+note right of serverless
+  - Auto-scaling compute
+  - Pay-per-invocation
+  - No server management
+  - Environment variables for secrets
+end note
+
+note right of github
+  - Public repository
+  - Continuous deployment
+  - Version tracking
+  - Documentation hosting
+end note
+
+note right of vercel
+  Production URL:
+  https://solar-calculator.vercel.app
+  (or custom domain)
+  
+  Environment:
+  - Node.js 18+
+  - Next.js 15
+  - Automatic HTTPS
+end note
+
+@enduml

@@ -215,8 +215,8 @@ export default function SolarResults({ estimate, solarData, systemArea }: SolarR
           <div>
             <h4 className="font-semibold text-blue-900 mb-2">Calculation Notes</h4>
             <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Calculations assume 22% panel efficiency and 14% system losses (industry standard)</li>
-              <li>• Solar irradiance data provided by PVGIS (Photovoltaic Geographical Information System)</li>
+              <li>• Energy production uses PVGIS modeled yield (E_y / E_m per kWp) × your installed capacity</li>
+              <li>• Irradiance charts use PVGIS plane-of-array data (H(i)); fallback estimates use area × irradiance when PVGIS is unavailable</li>
               <li>• Financial savings based on regional electricity rates</li>
               <li>• CO₂ savings based on regional grid emission factors</li>
               <li>• Actual performance may vary based on weather, shading, and maintenance</li>

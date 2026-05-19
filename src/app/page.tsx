@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Sun, MapPin, Settings, Calculator } from 'lucide-react';
 import ClientOnly from '@/components/ClientOnly';
 import SolarResults from '@/components/SolarResults';
+import QuickPresets from '@/components/QuickPresets';
 import { Location, SolarData, SystemSpecs, SolarEstimate } from '@/types/solar';
 import axios from 'axios';
 
@@ -135,7 +136,18 @@ export default function Home() {
                     Step 1: Select Location
                   </h3>
                 </div>
-                
+
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-3">
+                  <QuickPresets
+                    onSelect={handleLocationSelect}
+                    selectedLat={selectedLocation?.lat}
+                    selectedLng={selectedLocation?.lng}
+                  />
+                  <p className="text-xs text-gray-600 mt-2">
+                    Tip: click a city to test the calculator instantly, or pick any spot on the map.
+                  </p>
+                </div>
+
                 <ClientOnly fallback={
                   <div className="flex items-center justify-center bg-gray-50 rounded-lg border" style={{ height: '500px' }}>
                     <div className="text-center">

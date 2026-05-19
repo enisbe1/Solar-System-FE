@@ -1,0 +1,42 @@
+@startuml System Context Diagram
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+title System Context Diagram - Solar Energy Calculator
+
+Person(user, "User", "Property owner, business manager, or solar consultant seeking solar energy estimates")
+
+System(solarApp, "Solar Energy Calculator", "Web application providing solar energy calculations and financial/environmental impact analysis")
+
+System_Ext(googleMaps, "Google Maps API", "Provides interactive maps, location search, and geocoding services")
+
+System_Ext(pvgis, "PVGIS API", "European Commission's Photovoltaic Geographical Information System - provides solar irradiance data")
+
+System_Ext(browser, "Web Browser", "Chrome, Firefox, Safari, or Edge browser")
+
+Rel(user, browser, "Interacts with", "HTTPS")
+Rel(browser, solarApp, "Accesses", "HTTPS")
+Rel(solarApp, googleMaps, "Fetches map data & geocoding", "HTTPS / REST API")
+Rel(solarApp, pvgis, "Retrieves solar irradiance data", "HTTPS / REST API")
+Rel(browser, googleMaps, "Loads map tiles", "HTTPS")
+
+note right of solarApp
+  Single Page Application (SPA)
+  Built with Next.js, TypeScript, React
+  Hosted on Vercel cloud platform
+  No user data storage
+end note
+
+note right of pvgis
+  Free, no authentication required
+  Historical data: 2016-2020
+  Multiple regional databases
+  Global coverage
+end note
+
+note right of googleMaps
+  Requires API key
+  Domain-restricted access
+  Satellite imagery for roof assessment
+end note
+
+@enduml

@@ -1,0 +1,79 @@
+@startuml Component Diagram
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title Component Diagram - Solar Energy Calculator Architecture
+
+Container(browser, "User's Browser", "Chrome, Firefox, Safari, Edge", "Renders UI and executes client-side logic")
+
+Container_Boundary(nextjs, "Next.js Application") {
+    
+    Component(homePage, "Home Page", "React Component", "Main calculator interface with step-by-step workflow")
+    
+    Component(googleMapComp, "GoogleMap Component", "React Component", "Interactive map with location selection, search, and marker placement")
+    
+    Component(solarResultsComp, "SolarResults Component", "React Component", "Displays calculations, charts, and environmental/financial metrics")
+    
+    Component(clientOnlyComp, "ClientOnly Component", "React Component", "Ensures client-side only rendering for SSR compatibility")
+    
+    Component(solarApiRoute, "Solar API Route", "Next.js API Route", "Proxy for PVGIS API requests, handles data fetching and fallback")
+    
+    Component(calculateApiRoute, "Calculate API Route", "Next.js API Route", "Performs energy, financial, and CO₂ calculations")
+    
+    Component(types, "Type Definitions", "TypeScript Interfaces", "SolarData, SystemSpecs, SolarEstimate, Location types")
+    
+    Component(utils, "Utility Functions", "Helper Functions", "Regional CO₂ factors, electricity rates, data validation")
+}
+
+ContainerDb_Ext(googleMapsAPI, "Google Maps API", "External Service", "Map tiles, geocoding, place search")
+
+ContainerDb_Ext(pvgisAPI, "PVGIS API", "External Service", "Solar irradiance data, monthly values, optimal angles")
+
+Rel(browser, homePage, "Loads and renders", "HTTPS")
+Rel(homePage, googleMapComp, "Embeds for location selection")
+Rel(homePage, solarResultsComp, "Passes calculation results")
+Rel(homePage, clientOnlyComp, "Wraps client-only components")
+
+Rel(googleMapComp, googleMapsAPI, "Fetches map data", "HTTPS / JavaScript API")
+
+Rel(homePage, solarApiRoute, "GET /api/solar?lat={lat}&lng={lng}", "HTTPS / JSON")
+Rel(homePage, calculateApiRoute, "POST /api/calculate {solarData, systemSpecs}", "HTTPS / JSON")
+
+Rel(solarApiRoute, pvgisAPI, "GET solar data", "HTTPS / JSON")
+Rel(solarApiRoute, types, "Uses SolarData interface")
+Rel(solarApiRoute, utils, "Uses estimation fallbacks")
+
+Rel(calculateApiRoute, types, "Uses all type definitions")
+Rel(calculateApiRoute, utils, "Uses regional factors")
+
+Rel(solarResultsComp, types, "Uses SolarEstimate, SolarData")
+
+note right of solarApiRoute
+  - Validates coordinates
+  - Handles PVGIS timeouts
+  - Provides latitude-based fallback
+  - Returns standardized SolarData
+end note
+
+note right of calculateApiRoute
+  - Energy production calculations
+  - Number of panels sizing
+  - Financial savings (regional rates)
+  - CO₂ emissions avoided
+  - Monthly breakdowns
+end note
+
+note right of googleMapComp
+  - Satellite imagery view
+  - Address autocomplete search
+  - Click and drag marker placement
+  - Reverse geocoding for addresses
+end note
+
+note right of solarResultsComp
+  - Key metrics dashboard
+  - Monthly production chart (Recharts)
+  - Irradiance visualization
+  - Financial & environmental impact
+end note
+
+@enduml
