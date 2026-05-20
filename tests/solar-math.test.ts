@@ -21,6 +21,9 @@ import {
   systemCapacityKw,
   treesEquivalent,
   calculateSolarEstimate,
+  estimateInstallationCost,
+  paybackYears,
+  lifetimeSavings,
 } from "@/lib/solar-math";
 
 describe("regional CO₂ factor table (FR-6.2)", () => {
@@ -238,5 +241,177 @@ describe("TC-REL-01 — PVGIS fallback path (Phase-1 §6.3)", () => {
     expect(r.yearlyEnergyKwh).toBeCloseTo(8514, 0);
     expect(r.numberOfPanels).toBe(15);
     expect(r.systemCapacityKw).toBe(6);
+  });
+});
+
+
+describe("user-overridable electricity rate (TD-2)", () => {
+  const solarData = {
+    location: { lat: 52.52, lng: 13.405 }, // Berlin → EU default 0.28
+    yearlyIrradiance: 1095,
+    optimalTilt: 35,
+    optimalAzimuth: 180,
+  };
+  const baseSpecs = {
+    area: 50,
+    panelEfficiency: 22,
+    systemLosses: 14,
+    panelPower: 400,
+    panelArea: 2.0,
+  };
+
+  it("uses the regional default when override is undefined", () => {
+    const r = calculateSolarEstimate(solarData, baseSpecs);
+    expect(r.financialSavings?.electricityRate).toBe(0.28);
+  });
+
+  it("honours a user override", () => {
+    const r = calculateSolarEstimate(solarData, {
+      ...baseSpecs,
+      electricityRateOverride: 0.42,
+    });
+    expect(r.financialSavings?.electricityRate).toBe(0.42);
+    // Energy = 50 × 1095 × 0.22 × 0.86 ≈ 10358.7 kWh
+    // Default self-consumption (no battery) = 30%; feed-in = 0.42 × 0.30 = 0.126
+    //   savings = 10358.7 × 0.30 × 0.42  +  10358.7 × 0.70 × 0.126
+    //          ≈ 1305.20 + 913.64 = 2218.84 → rounded 2219
+    expect(r.financialSavings?.yearlySavings).toBeCloseTo(2219, 0);
+  });
+
+  it("returns to ~100% self-consumption equivalent when overridden", () => {
+    const r = calculateSolarEstimate(solarData, {
+      ...baseSpecs,
+      electricityRateOverride: 0.42,
+      selfConsumptionPct: 1,
+    });
+    // Now matches the legacy single-rate formula:
+    // 50 × 1095 × 0.22 × 0.86 × 0.42 ≈ 4351
+    expect(r.financialSavings?.yearlySavings).toBeCloseTo(4351, 0);
+  });
+
+  it("ignores override when it's zero or negative", () => {
+    const r = calculateSolarEstimate(solarData, {
+      ...baseSpecs,
+      electricityRateOverride: 0,
+    });
+    expect(r.financialSavings?.electricityRate).toBe(0.28);
+  });
+});
+
+
+describe("self-consumption defaults (TD-1)", () => {
+  // Use the Pristina yield case so we have a known energy figure.
+  // 250 m² → 50 kWp; PVGIS E_y 1319.2 → 65960 kWh/yr at 14% losses.
+  // Berlin EU box → retail 0.28; feed-in default 0.084.
+  const solarData = {
+    location: { lat: 42.241, lng: 21.244 },
+    yearlyIrradiance: 1691,
+    yearlyYieldKwhPerKwp: 1319.2,
+    optimalTilt: 35,
+    optimalAzimuth: 180,
+  };
+  const baseSpecs = {
+    area: 250,
+    panelEfficiency: 22,
+    systemLosses: 14,
+    panelPower: 400,
+    panelArea: 2.0,
+  };
+
+  it("defaults to 30% self-consumption with no battery", () => {
+    const r = calculateSolarEstimate(solarData, baseSpecs);
+    expect(r.financialSavings?.selfConsumptionPct).toBe(0.3);
+    // Pristina is OUTSIDE EU box (lng 21.244 > -10 but lat 42 → EU box hits).
+    // Retail 0.28 USD/kWh; feed-in default 0.28 × 0.30 = 0.084.
+    // Self-consumed: 65960 × 0.3 × 0.28 = 5540.64
+    // Exported:      65960 × 0.7 × 0.084 = 3878.43
+    // Total:                              ≈ 9419
+    expect(r.financialSavings?.yearlySavings).toBeCloseTo(9419, -1);
+  });
+
+  it("defaults to 75% self-consumption when a battery is present", () => {
+    const r = calculateSolarEstimate(solarData, {
+      ...baseSpecs,
+      batteryKwh: 10,
+    });
+    expect(r.financialSavings?.selfConsumptionPct).toBe(0.75);
+    // Self-consumed: 65960 × 0.75 × 0.28 = 13851.6
+    // Exported:      65960 × 0.25 × 0.084 = 1385.16
+    // Total:                              ≈ 15237
+    expect(r.financialSavings?.yearlySavings).toBeCloseTo(15237, -1);
+  });
+
+  it("battery raises savings by ~60% in this case", () => {
+    const no  = calculateSolarEstimate(solarData, baseSpecs);
+    const yes = calculateSolarEstimate(solarData, { ...baseSpecs, batteryKwh: 10 });
+    // Sanity: with battery should be clearly better than without
+    expect((yes.financialSavings?.yearlySavings ?? 0) /
+           (no.financialSavings?.yearlySavings ?? 1)).toBeGreaterThan(1.4);
+  });
+});
+
+describe("installation cost estimation", () => {
+  it("estimates $1,650/kWp for a no-battery system", () => {
+    expect(estimateInstallationCost(10, 0)).toBe(16500);
+  });
+  it("adds $700/kWh for the battery", () => {
+    expect(estimateInstallationCost(10, 10)).toBe(16500 + 7000);
+  });
+  it("clamps negative battery sizes to zero", () => {
+    expect(estimateInstallationCost(10, -5)).toBe(16500);
+  });
+});
+
+describe("payback period", () => {
+  it("computes years to recover the up-front cost", () => {
+    expect(paybackYears(16500, 1500)).toBeCloseTo(11, 2);
+  });
+  it("returns null when yearly savings are zero or negative", () => {
+    expect(paybackYears(16500, 0)).toBeNull();
+    expect(paybackYears(16500, -5)).toBeNull();
+  });
+});
+
+describe("lifetime savings", () => {
+  it("subtracts up-front cost from 25 × yearly savings", () => {
+    expect(lifetimeSavings(2000, 16500)).toBe(2000 * 25 - 16500);
+  });
+  it("can be negative when payback isn't achievable in 25 years", () => {
+    expect(lifetimeSavings(500, 100000)).toBeLessThan(0);
+  });
+});
+
+describe("calculateSolarEstimate — investment block", () => {
+  const solarData = {
+    location: { lat: 52.52, lng: 13.405 },
+    yearlyIrradiance: 1095,
+    yearlyYieldKwhPerKwp: 1100,
+    optimalTilt: 35,
+    optimalAzimuth: 180,
+  };
+  const specs = {
+    area: 50,
+    panelEfficiency: 22,
+    systemLosses: 14,
+    panelPower: 400,
+    panelArea: 2.0,
+  };
+
+  it("emits an investment block with auto-estimated cost", () => {
+    const r = calculateSolarEstimate(solarData, specs);
+    expect(r.investment).toBeDefined();
+    // 25 panels × 400 W = 10 kWp → $16 500 installation
+    expect(r.investment?.installationCostUsd).toBe(16500);
+    expect(r.investment?.batteryCostUsd).toBe(0);
+    expect(r.investment?.paybackYears).toBeGreaterThan(0);
+    expect(r.investment?.lifetimeSavingsUsd).toBeGreaterThan(-1_000_000);
+  });
+
+  it("honours user-supplied installation cost", () => {
+    const r = calculateSolarEstimate(solarData, {
+      ...specs,
+      installationCostUsd: 12000,
+    });
+    expect(r.investment?.installationCostUsd).toBe(12000);
   });
 });

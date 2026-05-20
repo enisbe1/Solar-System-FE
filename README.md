@@ -12,6 +12,24 @@ A comprehensive single-page application (SPA) for estimating solar energy potent
 - **Environmental Impact**: CO₂ reduction and tree equivalent calculations
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
 
+## 🆕 What's new in the Phase 2 release
+
+- **Draw your roof outline** on the satellite map — area in m² is computed
+  automatically via `google.maps.geometry.spherical.computeArea`.
+- **Quick-pick locations** for five EU reference cities (Berlin, Madrid,
+  Athens, Stockholm, Lisbon).
+- **Realistic financial model** — battery (0–100 kWh), self-consumption
+  (defaults 30 % without battery / 75 % with), installation cost, retail and
+  feed-in tariffs, payback period in years, and 25-year net savings.
+- **PVGIS energy yield (E_y) calculation path** — uses PVGIS's measured
+  yield in kWh/kWp/year scaled to the user's loss assumption, more accurate
+  than `area × irradiance × efficiency`.
+- **Downloadable PDF report** of every calculation, generated entirely
+  client-side via `@react-pdf/renderer` (no data leaves the browser).
+- **48-test Vitest suite** covering CO₂ factor table, electricity rate
+  table, latitude fallback, payback math, and the Berlin / Madrid test
+  cases from the portfolio document. Run with `npm test`.
+
 ## 🏗️ Architecture
 
 ### Frontend
@@ -36,8 +54,8 @@ API/Calculate → Energy Formulas → Results Dashboard
 
 ### 1. Clone and Install
 ```bash
-git clone <repository-url>
-cd solar-system-fe
+git clone https://github.com/enisbe1/Solar-System-FE.git
+cd Solar-System-FE
 npm install
 ```
 
@@ -57,10 +75,10 @@ NREL_API_KEY=your_nrel_api_key_here
 ### 3. Google Maps API Setup
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
 2. Create a new project or select an existing one
-3. Enable the following APIs:
-   - Maps JavaScript API
+3. Enable the following APIs (all required):
+   - Maps JavaScript API (loads `maps`, `places`, `drawing`, `geometry`)
    - Geocoding API
-   - Places API (optional)
+   - Places API
 4. Create credentials (API Key)
 5. Add the API key to your `.env.local` file
 
@@ -76,6 +94,28 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
 npm run build
 npm start
 ```
+
+### 6. Run tests
+```bash
+npm test          # one-shot run (48 unit tests, ~5 ms)
+npm run test:watch
+```
+
+The test suite covers the deterministic helpers in `src/lib/solar-math.ts`
+— regional CO₂ factors, electricity rates, latitude-band fallback, payback /
+battery math, and the TC-FUNC-01 (Berlin) and TC-REL-01 (PVGIS fallback)
+specifications from §6.3 of the portfolio document.
+
+## 📚 Project documentation
+
+The full software-engineering portfolio (Phase 1 revised + Phase 2) is at
+`docs/phase1/` plus the submitted PDFs:
+
+- `Berisha-Enis_9210947_PSE_P1_S.pdf` — Project profile, requirements,
+  architecture, risks, project plan, test specs, glossary (27 pages).
+- `Berisha-Enis_9210947_PSE_P2_S.pdf` — Implementation procedure, tutor
+  feedback addressed, updated requirements, complemented architecture,
+  tech-stack rationale, test evidence, reflection (16 pages).
 
 ## 📊 How It Works
 

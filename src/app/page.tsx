@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Sun, MapPin, Settings, Calculator } from 'lucide-react';
 import ClientOnly from '@/components/ClientOnly';
@@ -22,6 +22,16 @@ const GoogleMap = dynamic(() => import('@/components/GoogleMap'), {
   ),
 });
 
+// Lazy-loaded PDF download button — @react-pdf/renderer is large and runs
+// only in the browser, so we keep it out of the initial bundle.
+const DownloadPdfButton = dynamic(
+  () => import('@/components/SolarReportPDF'),
+  { ssr: false, loading: () => (
+      <span className="text-sm text-gray-500">Preparing PDF tools…</span>
+  ) },
+);
+
+
 export default function Home() {
   const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [systemSpecs, setSystemSpecs] = useState<SystemSpecs>({
@@ -37,13 +47,23 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleLocationSelect = (location: Location) => {
+  const handleLocationSelect = useCallback((location: Location) => {
     setSelectedLocation(location);
     setError(null);
     // Reset previous results when location changes
     setSolarData(null);
     setEstimate(null);
-  };
+  }, []);
+
+  // Fired by GoogleMap when the user finishes drawing a roof outline.
+  // Updates the area field so the existing calculation pipeline picks it up.
+  const handleAreaDrawn = useCallback((areaM2: number) => {
+    if (areaM2 <= 0) return; // 0 means cleared — keep existing value
+    setSystemSpecs((prev) => ({ ...prev, area: Math.round(areaM2) }));
+    // Invalidate previous results — the area changed
+    setEstimate(null);
+    setSolarData(null);
+  }, []);
 
   const handleCalculate = async () => {
     if (!selectedLocation) {
@@ -158,6 +178,7 @@ export default function Home() {
                 }>
                   <GoogleMap
                     onLocationSelect={handleLocationSelect}
+                    onAreaDrawn={handleAreaDrawn}
                     selectedLocation={selectedLocation}
                     height="500px"
                   />
@@ -201,7 +222,8 @@ export default function Home() {
                       placeholder="e.g., 100"
                     />
                     <p className="text-xs text-gray-500 mt-1">
-                      Rooftop or land area available for solar panels
+                      Rooftop or land area available for solar panels — or trace your
+                      roof on the satellite map to fill this in automatically.
                     </p>
                   </div>
 
@@ -287,6 +309,142 @@ export default function Home() {
                     </div>
                   </div>
 
+                  {/* Financial assumptions — collapsible (TD-1, TD-2) */}
+                  <div className="border-t pt-4">
+                    <details className="group">
+                      <summary className="cursor-pointer select-none flex items-center justify-between text-sm font-medium text-gray-800 hover:text-blue-600">
+                        <span>Financial assumptions <span className="text-gray-400 font-normal">— optional</span></span>
+                        <span className="text-xs text-gray-400 group-open:hidden">show</span>
+                        <span className="text-xs text-gray-400 hidden group-open:inline">hide</span>
+                      </summary>
+
+                      <div className="mt-4 space-y-4">
+                        {/* Electricity rate override */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Retail electricity rate (USD/kWh)
+                          </label>
+                          <input
+                            type="number" min="0" max="2" step="0.01"
+                            value={systemSpecs.electricityRateOverride ?? ''}
+                            placeholder="Auto (regional default)"
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setSystemSpecs(prev => ({
+                                ...prev,
+                                electricityRateOverride: v === '' ? undefined : parseFloat(v),
+                              }));
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Your tariff per kWh; leave blank for the regional default (EU ≈ 0.28).
+                          </p>
+                        </div>
+
+                        {/* Feed-in tariff override */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Feed-in tariff (USD/kWh)
+                          </label>
+                          <input
+                            type="number" min="0" max="2" step="0.01"
+                            value={systemSpecs.feedInRateUsd ?? ''}
+                            placeholder="Auto (30% of retail)"
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setSystemSpecs(prev => ({
+                                ...prev,
+                                feedInRateUsd: v === '' ? undefined : parseFloat(v),
+                              }));
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Price paid for energy exported to the grid.
+                          </p>
+                        </div>
+
+                        {/* Battery + self-consumption */}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Battery (kWh)
+                            </label>
+                            <input
+                              type="number" min="0" max="100" step="1"
+                              value={systemSpecs.batteryKwh ?? ''}
+                              placeholder="0"
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setSystemSpecs(prev => ({
+                                  ...prev,
+                                  batteryKwh: v === '' ? undefined : parseFloat(v),
+                                  // Drop a manual self-consumption override so the
+                                  // default reflects the new battery state.
+                                  selfConsumptionPct: undefined,
+                                }));
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Adding a battery typically lifts self-consumption from 30% to 75%.
+                            </p>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Self-consumption (%)
+                            </label>
+                            <input
+                              type="number" min="0" max="100" step="5"
+                              value={
+                                systemSpecs.selfConsumptionPct !== undefined
+                                  ? Math.round(systemSpecs.selfConsumptionPct * 100)
+                                  : ''
+                              }
+                              placeholder={(systemSpecs.batteryKwh ?? 0) > 0 ? '75' : '30'}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setSystemSpecs(prev => ({
+                                  ...prev,
+                                  selfConsumptionPct: v === '' ? undefined : parseFloat(v) / 100,
+                                }));
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Share of generation used on-site.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Installation cost override */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Installation cost (USD)
+                          </label>
+                          <input
+                            type="number" min="0" step="100"
+                            value={systemSpecs.installationCostUsd ?? ''}
+                            placeholder="Auto ($1,650/kWp + $700/kWh battery)"
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setSystemSpecs(prev => ({
+                                ...prev,
+                                installationCostUsd: v === '' ? undefined : parseFloat(v),
+                              }));
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Up-front cost. Drives the payback calculation.
+                          </p>
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+
                   {/* Calculate Button */}
                   <button
                     onClick={handleCalculate}
@@ -331,6 +489,16 @@ export default function Home() {
               ← Back to Calculator
             </button>
             
+            {estimate && solarData && (
+              <div className="mb-6 flex justify-end">
+                <DownloadPdfButton
+                  estimate={estimate}
+                  solarData={solarData}
+                  systemSpecs={systemSpecs}
+                />
+              </div>
+            )}
+
             {solarData && (
               <ClientOnly fallback={
                 <div className="flex items-center justify-center py-20">

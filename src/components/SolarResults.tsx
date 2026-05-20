@@ -2,7 +2,7 @@
 
 import { SolarEstimate, SolarData } from '@/types/solar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line} from 'recharts';
-import { Sun, Zap, Leaf, DollarSign, MapPin, Calculator } from 'lucide-react';
+import { Sun, Zap, Leaf, DollarSign, MapPin, Calculator, TrendingUp, Wallet } from 'lucide-react';
 
 interface SolarResultsProps {
   estimate: SolarEstimate;
@@ -102,6 +102,96 @@ export default function SolarResults({ estimate, solarData, systemArea }: SolarR
           </div>
         </div>
       </div>
+
+      {/* Investment summary (payback / lifetime) */}
+      {estimate.investment && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-xl border shadow-sm p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">
+                  Installation cost
+                </p>
+                <p className="text-2xl font-bold text-gray-900 mt-1">
+                  {formatCurrency(estimate.investment.installationCostUsd)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {estimate.investment.batteryCostUsd > 0
+                    ? `incl. ${formatCurrency(estimate.investment.batteryCostUsd)} battery`
+                    : "no battery"}
+                </p>
+              </div>
+              <Wallet className="w-8 h-8 text-gray-400" />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border shadow-sm p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">
+                  Payback period
+                </p>
+                <p className="text-2xl font-bold text-blue-700 mt-1">
+                  {estimate.investment.paybackYears !== null
+                    ? `${estimate.investment.paybackYears.toFixed(1)} years`
+                    : "—"}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {estimate.investment.paybackYears !== null
+                    ? "time to recover the up-front cost"
+                    : "no payback under current assumptions"}
+                </p>
+              </div>
+              <Calculator className="w-8 h-8 text-blue-400" />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border shadow-sm p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">
+                  25-year net savings
+                </p>
+                <p
+                  className={
+                    "text-2xl font-bold mt-1 " +
+                    ((estimate.investment.lifetimeSavingsUsd ?? 0) >= 0
+                      ? "text-emerald-600"
+                      : "text-red-600")
+                  }
+                >
+                  {formatCurrency(estimate.investment.lifetimeSavingsUsd)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  yearly savings × 25 − up-front cost
+                </p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-emerald-400" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Self-consumption split */}
+      {estimate.financialSavings && (
+        <div className="bg-white rounded-xl border shadow-sm p-4 text-sm">
+          <p className="text-gray-700">
+            <span className="font-semibold">
+              {Math.round((estimate.financialSavings.selfConsumptionPct ?? 0) * 100)}%
+            </span>{" "}
+            self-consumed ({formatNumber(estimate.financialSavings.selfConsumedKwh)} kWh @
+            {" "}{estimate.financialSavings.electricityRate.toFixed(3)} /kWh) ·{" "}
+            <span className="font-semibold">
+              {Math.round((1 - (estimate.financialSavings.selfConsumptionPct ?? 0)) * 100)}%
+            </span>{" "}
+            exported ({formatNumber(estimate.financialSavings.exportedKwh)} kWh @
+            {" "}{estimate.financialSavings.feedInRate.toFixed(3)} /kWh).
+            <span className="block text-xs text-gray-500 mt-1">
+              Adjust battery / self-consumption in the form to compare scenarios.
+            </span>
+          </p>
+        </div>
+      )}
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

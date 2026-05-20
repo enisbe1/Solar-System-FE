@@ -1,90 +1,73 @@
 /**
  * Pure, deterministic helpers for the solar energy calculator.
  *
- * Extracting these out of /api/calculate and /api/solar means they can be
- * unit-tested with vitest. The test cases TC-FUNC-01 (Berlin) and TC-REL-01
- * (PVGIS fallback) from the Phase-1 portfolio document target these helpers.
+ * Two complementary calculation paths are supported:
  *
- * Keep this module:
+ *  - **PVGIS-yield path** (preferred). When PVGIS returns yearlyYieldKwhPerKwp
+ *    (its E_y figure), we use systemCapacityKwp × E_y, scaled for the user's
+ *    chosen losses relative to PVGIS's 14% reference. This is more accurate
+ *    than reapplying our own efficiency model because PVGIS already factors
+ *    in panel orientation, climate, geometry and shading.
+ *
+ *  - **Irradiance fallback** (legacy). Used when yieldKwhPerKwp is missing —
+ *    e.g. when the PVGIS API was unreachable and we fell back to a
+ *    latitude-band estimate (R-T-2 in the doc).
+ *
+ * Financial helpers (installation cost, self-consumption, payback, lifetime
+ * savings) close part of TD-1 from the Phase-1 portfolio.
+ *
+ * Module rules:
  *   - dependency-free (no fetch, no fs, no NextResponse)
- *   - exported function-by-function so each can be re-imported individually
- *   - fully typed and documented with JSDoc
+ *   - exported function-by-function so each can be imported individually
+ *   - JSDoc on everything; backwards-compatible signatures
  */
 
 import type { SolarData, SystemSpecs, SolarEstimate } from "@/types/solar";
 
-// --- Constants -----------------------------------------------------------
+// --- Physical / financial constants ------------------------------------
 
-/** Standard panel area in m² (a typical 60-cell crystalline silicon panel). */
 export const DEFAULT_PANEL_AREA_M2 = 2.0;
-
-/** Standard panel power in Wp. */
 export const DEFAULT_PANEL_POWER_W = 400;
-
-/** Default panel efficiency (%) — modern crystalline silicon. */
 export const DEFAULT_PANEL_EFFICIENCY_PCT = 22;
-
-/** Default whole-system losses (%) — inverter, wiring, soiling. */
 export const DEFAULT_SYSTEM_LOSSES_PCT = 14;
-
-/** Loss % baked into PVGIS E_y / E_m when we call the PVcalc API. */
-export const PVGIS_REFERENCE_LOSS_PCT = 14;
-
-/** kg CO₂ absorbed per mature tree per year (used for the tree equivalent). */
 export const KG_CO2_PER_TREE_YEAR = 21.77;
 
-// --- Regional factors ---------------------------------------------------
+/** PVGIS's default system-losses figure when computing E_y / E_m. */
+export const PVGIS_REFERENCE_LOSSES_PCT = 14;
 
-/**
- * Region-specific grid CO₂ emission factor in kg CO₂ / kWh.
- *
- * Coarse regional averages — explicitly listed as TD-3 (technical debt)
- * in the Phase-1 document and cross-referenced against IEA 2023 estimates.
- */
+export const COST_PER_KWP_USD = 1650;
+export const COST_PER_KWH_BATTERY_USD = 700;
+export const DEFAULT_SELF_CONSUMPTION_NO_BATTERY = 0.30;
+export const DEFAULT_SELF_CONSUMPTION_WITH_BATTERY = 0.75;
+export const DEFAULT_FEED_IN_FRACTION_OF_RETAIL = 0.30;
+export const PANEL_LIFETIME_YEARS = 25;
+
+// --- Regional factors --------------------------------------------------
+
 export function getCO2Factor(lat: number, lng: number): number {
-  // European Union average
   if (lat > 35 && lat < 70 && lng > -10 && lng < 40) return 0.276;
-  // United States
   if (lat > 25 && lat < 49 && lng > -125 && lng < -66) return 0.386;
-  // India (checked first — its box overlaps China at lng 73-97)
   if (lat > 6 && lat < 37 && lng > 68 && lng < 97) return 0.708;
-  // China
   if (lat > 18 && lat < 54 && lng > 73 && lng < 135) return 0.555;
-  // Australia
   if (lat > -44 && lat < -10 && lng > 113 && lng < 154) return 0.634;
-  // Brazil (hydro-heavy grid)
   if (lat > -34 && lat < 5 && lng > -74 && lng < -34) return 0.074;
-  // World average
   return 0.475;
 }
 
-/**
- * Region-specific retail electricity rate in USD / kWh.
- * Source URLs and revision dates are tracked in docs/data-sources.md.
- */
 export function getElectricityRate(lat: number, lng: number): number {
-  // European Union
   if (lat > 35 && lat < 70 && lng > -10 && lng < 40) return 0.28;
-  // United States — split between coasts and centre
   if (lat > 25 && lat < 49 && lng > -125 && lng < -66) {
-    if (lng > -104) return 0.13; // Eastern US
-    if (lng < -104) return 0.15; // Western US
-    return 0.14;                 // Central US
+    if (lng > -104) return 0.13;
+    if (lng < -104) return 0.15;
+    return 0.14;
   }
-  // China
   if (lat > 18 && lat < 54 && lng > 73 && lng < 135) return 0.08;
-  // Australia
   if (lat > -44 && lat < -10 && lng > 113 && lng < 154) return 0.25;
   return 0.15;
 }
 
-// --- Fallback estimation (PVGIS unavailable) -----------------------------
+// --- Fallback irradiance ------------------------------------------------
 
-/**
- * Rough yearly irradiance estimate in kWh/m²/year, based on latitude band.
- * Used by the PVGIS fallback path when the external API is unreachable —
- * see test case TC-REL-01 in §6.3 of the Phase-1 document.
- */
 export function estimateIrradianceByLatitude(lat: number): number {
   const abs = Math.abs(lat);
   if (abs < 10) return 2100;
@@ -96,10 +79,6 @@ export function estimateIrradianceByLatitude(lat: number): number {
   return 600;
 }
 
-/**
- * Distribute a yearly irradiance figure into 12 monthly values that respect
- * the seasonal pattern of the relevant hemisphere.
- */
 export function generateEstimatedMonthlyData(yearlyTotal: number, lat: number): number[] {
   const monthlyAvg = yearlyTotal / 12;
   const seasonal = lat >= 0
@@ -108,12 +87,24 @@ export function generateEstimatedMonthlyData(yearlyTotal: number, lat: number): 
   return seasonal.map((f) => monthlyAvg * f);
 }
 
-// --- Core calculation ----------------------------------------------------
+// --- Sizing helpers -----------------------------------------------------
 
-/**
- * Calculate yearly energy production in kWh.
- * Formula: area × irradiance × η_panel × η_system.
- */
+export function panelCount(areaM2: number, panelAreaM2: number): number {
+  if (panelAreaM2 <= 0) return 0;
+  return Math.floor(areaM2 / panelAreaM2);
+}
+
+export function systemCapacityKw(panels: number, panelPowerW: number): number {
+  return (panels * panelPowerW) / 1000;
+}
+
+export function treesEquivalent(co2SavingsKg: number): number {
+  return Math.round(co2SavingsKg / KG_CO2_PER_TREE_YEAR);
+}
+
+// --- Energy helpers -----------------------------------------------------
+
+/** Legacy irradiance-based formula. Still used when PVGIS yield is unavailable. */
 export function yearlyEnergyKwh(
   areaM2: number,
   yearlyIrradiance: number,
@@ -125,56 +116,95 @@ export function yearlyEnergyKwh(
   return areaM2 * yearlyIrradiance * eta * systemEta;
 }
 
-/** Panels = floor(area / panel area). */
-export function panelCount(areaM2: number, panelAreaM2: number): number {
-  if (panelAreaM2 <= 0) return 0;
-  return Math.floor(areaM2 / panelAreaM2);
-}
-
-/** System capacity in kWp = (panels × panel power) / 1000. */
-export function systemCapacityKw(panels: number, panelPowerW: number): number {
-  return (panels * panelPowerW) / 1000;
+/**
+ * Scale factor that adjusts PVGIS-derived energy for a user-chosen losses
+ * value different from PVGIS's 14% reference.
+ *
+ *   factor = (1 − userLosses/100) / (1 − 0.14)
+ *
+ * userLosses = 14% returns 1.0; 20% returns ≈ 0.93.
+ */
+export function lossAdjustmentFactor(userLossesPct: number): number {
+  const userSystemEta = 1 - userLossesPct / 100;
+  const pvgisSystemEta = 1 - PVGIS_REFERENCE_LOSSES_PCT / 100;
+  return userSystemEta / pvgisSystemEta;
 }
 
 /**
- * Scale PVGIS yield when the user picks a different system-loss % than the
- * reference used in the PVGIS request (see PVGIS_REFERENCE_LOSS_PCT).
+ * Yearly energy from PVGIS yield: kWp × E_y × lossAdjustmentFactor.
+ * E_y is the yearly PV energy yield in kWh per installed kWp.
  */
-export function lossAdjustmentFactor(
-  userLossPct: number,
-  referenceLossPct: number = PVGIS_REFERENCE_LOSS_PCT,
-): number {
-  return (1 - userLossPct / 100) / (1 - referenceLossPct / 100);
-}
-
-/** Yearly production from PVGIS E_y (kWh/kWp) × installed kWp. */
 export function yearlyEnergyFromPvgisYield(
-  capacityKw: number,
+  systemCapacityKwp: number,
   yieldKwhPerKwp: number,
-  systemLossesPct: number,
+  userLossesPct: number,
 ): number {
-  return capacityKw * yieldKwhPerKwp * lossAdjustmentFactor(systemLossesPct);
-}
-
-/** Monthly production from PVGIS E_m (kWh/kWp per month) × installed kWp. */
-export function monthlyEnergyFromPvgisYield(
-  capacityKw: number,
-  monthlyYieldKwhPerKwp: number[],
-  systemLossesPct: number,
-): number[] {
-  const factor = lossAdjustmentFactor(systemLossesPct);
-  return monthlyYieldKwhPerKwp.map((y) => capacityKw * y * factor);
-}
-
-/** Tree-equivalent for environmental impact. */
-export function treesEquivalent(co2SavingsKg: number): number {
-  return Math.round(co2SavingsKg / KG_CO2_PER_TREE_YEAR);
+  return systemCapacityKwp * yieldKwhPerKwp * lossAdjustmentFactor(userLossesPct);
 }
 
 /**
- * Run the full calculation. Mirrors the body of /api/calculate so the API
- * route stays a thin transport wrapper around a pure function.
+ * Monthly energy from PVGIS monthly yields (kWh per kWp per month).
+ * Returns 12 numbers, each in kWh.
  */
+export function monthlyEnergyFromPvgisYield(
+  systemCapacityKwp: number,
+  monthlyYieldKwhPerKwp: number[],
+  userLossesPct: number,
+): number[] {
+  const factor = lossAdjustmentFactor(userLossesPct);
+  return monthlyYieldKwhPerKwp.map((y) => systemCapacityKwp * y * factor);
+}
+
+// --- Financial helpers --------------------------------------------------
+
+export function estimateInstallationCost(
+  systemCapacityKwp: number,
+  batteryKwh: number = 0,
+): number {
+  const pvCost = systemCapacityKwp * COST_PER_KWP_USD;
+  const batteryCost = Math.max(0, batteryKwh) * COST_PER_KWH_BATTERY_USD;
+  return Math.round(pvCost + batteryCost);
+}
+
+export function defaultSelfConsumption(batteryKwh: number = 0): number {
+  return batteryKwh > 0
+    ? DEFAULT_SELF_CONSUMPTION_WITH_BATTERY
+    : DEFAULT_SELF_CONSUMPTION_NO_BATTERY;
+}
+
+export function splitYearlySavings(
+  yearlyEnergyKwhValue: number,
+  selfConsumptionPct: number,
+  retailRateUsd: number,
+  feedInRateUsd: number,
+): { yearlySavings: number; selfConsumedKwh: number; exportedKwh: number } {
+  const consumed = yearlyEnergyKwhValue * selfConsumptionPct;
+  const exported = yearlyEnergyKwhValue - consumed;
+  return {
+    yearlySavings: consumed * retailRateUsd + exported * feedInRateUsd,
+    selfConsumedKwh: consumed,
+    exportedKwh: exported,
+  };
+}
+
+export function paybackYears(
+  installationCostUsd: number,
+  yearlySavingsUsd: number,
+): number | null {
+  if (yearlySavingsUsd <= 0) return null;
+  return installationCostUsd / yearlySavingsUsd;
+}
+
+export function lifetimeSavings(
+  yearlySavingsUsd: number,
+  installationCostUsd: number,
+  years: number = PANEL_LIFETIME_YEARS,
+): number {
+  return Math.round(yearlySavingsUsd * years - installationCostUsd);
+}
+
+// --- Top-level: full estimate ------------------------------------------
+
 export function calculateSolarEstimate(
   solarData: SolarData,
   systemSpecs: SystemSpecs,
@@ -182,42 +212,77 @@ export function calculateSolarEstimate(
   const panels = panelCount(systemSpecs.area, systemSpecs.panelArea);
   const capacity = systemCapacityKw(panels, systemSpecs.panelPower);
 
-  const usePvgisYield =
-    solarData.yearlyYieldKwhPerKwp != null && solarData.yearlyYieldKwhPerKwp > 0;
+  // Prefer PVGIS yield when present (more accurate); otherwise legacy formula.
+  let energy: number;
+  let monthlyEnergy: number[] | undefined;
 
-  const energy = usePvgisYield
-    ? yearlyEnergyFromPvgisYield(
-        capacity,
-        solarData.yearlyYieldKwhPerKwp!,
-        systemSpecs.systemLosses,
-      )
-    : yearlyEnergyKwh(
-        systemSpecs.area,
-        solarData.yearlyIrradiance,
-        systemSpecs.panelEfficiency,
-        systemSpecs.systemLosses,
-      );
+  if (solarData.yearlyYieldKwhPerKwp !== undefined && capacity > 0) {
+    energy = yearlyEnergyFromPvgisYield(
+      capacity,
+      solarData.yearlyYieldKwhPerKwp,
+      systemSpecs.systemLosses,
+    );
 
-  const co2Factor = getCO2Factor(solarData.location.lat, solarData.location.lng);
-  const co2 = energy * co2Factor;
-  const rate = getElectricityRate(solarData.location.lat, solarData.location.lng);
-  const savings = energy * rate;
-
-  const monthlyEnergy = usePvgisYield && solarData.monthlyYieldKwhPerKwp?.length === 12
-    ? monthlyEnergyFromPvgisYield(
+    if (solarData.monthlyYieldKwhPerKwp?.length === 12) {
+      monthlyEnergy = monthlyEnergyFromPvgisYield(
         capacity,
         solarData.monthlyYieldKwhPerKwp,
         systemSpecs.systemLosses,
-      )
-    : solarData.monthlyData?.length === 12
+      );
+    }
+  } else {
+    energy = yearlyEnergyKwh(
+      systemSpecs.area,
+      solarData.yearlyIrradiance,
+      systemSpecs.panelEfficiency,
+      systemSpecs.systemLosses,
+    );
+    monthlyEnergy = solarData.monthlyData?.length === 12
       ? solarData.monthlyData.map((m) =>
-          yearlyEnergyKwh(
-            systemSpecs.area,
-            m * 12,
-            systemSpecs.panelEfficiency,
-            systemSpecs.systemLosses,
-          ) / 12)
+          yearlyEnergyKwh(systemSpecs.area, m * 12, systemSpecs.panelEfficiency, systemSpecs.systemLosses) / 12,
+        )
       : undefined;
+  }
+
+  const co2Factor = getCO2Factor(solarData.location.lat, solarData.location.lng);
+  const co2 = energy * co2Factor;
+
+  const retailRate =
+    systemSpecs.electricityRateOverride !== undefined &&
+    systemSpecs.electricityRateOverride > 0
+      ? systemSpecs.electricityRateOverride
+      : getElectricityRate(solarData.location.lat, solarData.location.lng);
+
+  const feedInRate =
+    systemSpecs.feedInRateUsd !== undefined && systemSpecs.feedInRateUsd >= 0
+      ? systemSpecs.feedInRateUsd
+      : retailRate * DEFAULT_FEED_IN_FRACTION_OF_RETAIL;
+
+  const batteryKwh = Math.max(0, systemSpecs.batteryKwh ?? 0);
+  const selfConsumption =
+    systemSpecs.selfConsumptionPct !== undefined
+      ? Math.max(0, Math.min(1, systemSpecs.selfConsumptionPct))
+      : defaultSelfConsumption(batteryKwh);
+
+  const { yearlySavings, selfConsumedKwh, exportedKwh } = splitYearlySavings(
+    energy,
+    selfConsumption,
+    retailRate,
+    feedInRate,
+  );
+
+  const installationCost =
+    systemSpecs.installationCostUsd !== undefined && systemSpecs.installationCostUsd > 0
+      ? systemSpecs.installationCostUsd
+      : estimateInstallationCost(capacity, batteryKwh);
+
+  const batteryCost =
+    systemSpecs.batteryCostUsd !== undefined && systemSpecs.batteryCostUsd >= 0
+      ? systemSpecs.batteryCostUsd
+      : batteryKwh * COST_PER_KWH_BATTERY_USD;
+
+  const payback = paybackYears(installationCost, yearlySavings);
+  const lifetime = lifetimeSavings(yearlySavings, installationCost);
 
   return {
     yearlyEnergyKwh: Math.round(energy),
@@ -226,8 +291,18 @@ export function calculateSolarEstimate(
     co2SavingsKg: Math.round(co2),
     monthlySavings: monthlyEnergy?.map((v) => Math.round(v)),
     financialSavings: {
-      yearlySavings: Math.round(savings),
-      electricityRate: Math.round(rate * 1000) / 1000,
+      yearlySavings: Math.round(yearlySavings),
+      electricityRate: Math.round(retailRate * 1000) / 1000,
+      feedInRate: Math.round(feedInRate * 1000) / 1000,
+      selfConsumptionPct: Math.round(selfConsumption * 100) / 100,
+      selfConsumedKwh: Math.round(selfConsumedKwh),
+      exportedKwh: Math.round(exportedKwh),
+    },
+    investment: {
+      installationCostUsd: Math.round(installationCost),
+      batteryCostUsd: Math.round(batteryCost),
+      paybackYears: payback === null ? null : Math.round(payback * 10) / 10,
+      lifetimeSavingsUsd: lifetime,
     },
   };
 }
