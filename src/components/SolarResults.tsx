@@ -33,19 +33,6 @@ export default function SolarResults({ estimate, solarData, systemArea, systemSp
     irradiance: solarData.monthlyData?.[index] ? Math.round(solarData.monthlyData[index] * 10) / 10 : 0,
   })) || [];
 
-  // Environmental impact data
-  const environmentalData = [
-    { name: 'CO₂ Saved', value: estimate.co2SavingsKg, color: '#10B981' },
-    { name: 'Trees Equivalent', value: Math.round(estimate.co2SavingsKg / 21.77), color: '#059669' }, // 1 tree absorbs ~21.77 kg CO2/year
-  ];
-
-  // System overview data
-  const systemData = [
-    { name: 'Solar Panels', value: estimate.numberOfPanels, color: '#3B82F6' },
-    { name: 'System Size (kW)', value: estimate.systemCapacityKw, color: '#6366F1' },
-    { name: 'Available Area (m²)', value: systemArea, color: '#8B5CF6' },
-  ];
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { 
       style: 'currency', 

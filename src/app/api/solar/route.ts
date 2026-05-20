@@ -5,9 +5,6 @@ import { SolarData } from '@/types/solar';
 // PVGIS API endpoint for photovoltaic geographical information system
 const PVGIS_API_URL = 'https://re.jrc.ec.europa.eu/api/v5_2/PVcalc';
 
-// NREL API endpoint (alternative)
-const NREL_API_URL = 'https://developer.nrel.gov/api/solar/solar_resource/v1.json';
-
 interface PVGISResponse {
   meta: {
     'inputs': {

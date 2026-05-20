@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { Sun, MapPin, Settings, Calculator } from 'lucide-react';
+import { MapPin, Settings, Calculator } from 'lucide-react';
 import ClientOnly from '@/components/ClientOnly';
 import SolarResults from '@/components/SolarResults';
 import QuickPresets from '@/components/QuickPresets';
