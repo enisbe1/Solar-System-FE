@@ -3,14 +3,28 @@
 import { SolarEstimate, SolarData } from '@/types/solar';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line} from 'recharts';
 import { Sun, Zap, Leaf, DollarSign, MapPin, Calculator, TrendingUp, Wallet } from 'lucide-react';
+import PaybackTimeline from './PaybackTimeline';
+import MathBreakdown from './MathBreakdown';
+import TiltAzimuthCompass from './TiltAzimuthCompass';
+import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
 
 interface SolarResultsProps {
   estimate: SolarEstimate;
   solarData: SolarData;
   systemArea: number;
+  /** Full system specs (preferred). When omitted, only `systemArea` is used
+   *  for the math breakdown panel — older callers stay compatible. */
+  systemSpecs?: import('@/types/solar').SystemSpecs;
 }
 
-export default function SolarResults({ estimate, solarData, systemArea }: SolarResultsProps) {
+export default function SolarResults({ estimate, solarData, systemArea, systemSpecs }: SolarResultsProps) {
+  // ---- Animated counters for the four headline metric cards. ----
+  // The hooks tween whenever the estimate prop changes (new calculation).
+  const animEnergy   = useAnimatedNumber(estimate.yearlyEnergyKwh);
+  const animKwp      = useAnimatedNumber(estimate.systemCapacityKw);
+  const animCo2      = useAnimatedNumber(estimate.co2SavingsKg);
+  const animSavings  = useAnimatedNumber(estimate.financialSavings?.yearlySavings ?? 0);
+
   // Prepare monthly data for chart
   const monthlyData = estimate.monthlySavings?.map((energy, index) => ({
     month: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
@@ -62,7 +76,7 @@ export default function SolarResults({ estimate, solarData, systemArea }: SolarR
           <div className="flex items-center justify-between">
             <div>
               <p className="text-yellow-100 text-sm font-medium">Annual Energy</p>
-              <p className="text-3xl font-bold">{formatNumber(estimate.yearlyEnergyKwh)}</p>
+              <p className="text-3xl font-bold tabular-nums">{formatNumber(Math.round(animEnergy))}</p>
               <p className="text-yellow-100 text-sm">kWh/year</p>
             </div>
             <Sun className="w-12 h-12 text-yellow-100" />
@@ -73,7 +87,7 @@ export default function SolarResults({ estimate, solarData, systemArea }: SolarR
           <div className="flex items-center justify-between">
             <div>
               <p className="text-blue-100 text-sm font-medium">System Capacity</p>
-              <p className="text-3xl font-bold">{estimate.systemCapacityKw}</p>
+              <p className="text-3xl font-bold tabular-nums">{animKwp.toFixed(2)}</p>
               <p className="text-blue-100 text-sm">kW ({estimate.numberOfPanels} panels)</p>
             </div>
             <Zap className="w-12 h-12 text-blue-100" />
@@ -84,7 +98,7 @@ export default function SolarResults({ estimate, solarData, systemArea }: SolarR
           <div className="flex items-center justify-between">
             <div>
               <p className="text-green-100 text-sm font-medium">CO₂ Savings</p>
-              <p className="text-3xl font-bold">{formatNumber(estimate.co2SavingsKg)}</p>
+              <p className="text-3xl font-bold tabular-nums">{formatNumber(Math.round(animCo2))}</p>
               <p className="text-green-100 text-sm">kg/year</p>
             </div>
             <Leaf className="w-12 h-12 text-green-100" />
@@ -95,13 +109,25 @@ export default function SolarResults({ estimate, solarData, systemArea }: SolarR
           <div className="flex items-center justify-between">
             <div>
               <p className="text-emerald-100 text-sm font-medium">Annual Savings</p>
-              <p className="text-3xl font-bold">{formatCurrency(estimate.financialSavings?.yearlySavings || 0)}</p>
+              <p className="text-3xl font-bold tabular-nums">{formatCurrency(Math.round(animSavings))}</p>
               <p className="text-emerald-100 text-sm">@ {(estimate.financialSavings?.electricityRate || 0).toFixed(3)}/kWh</p>
             </div>
             <DollarSign className="w-12 h-12 text-emerald-100" />
           </div>
         </div>
       </div>
+
+      {/* Payback timeline — the headline business insight */}
+      {estimate.investment && <PaybackTimeline estimate={estimate} />}
+
+      {/* Show-the-math expandable panel — exposes the formulas behind each metric */}
+      {systemSpecs && (
+        <MathBreakdown
+          estimate={estimate}
+          solarData={solarData}
+          systemSpecs={systemSpecs}
+        />
+      )}
 
       {/* Investment summary (payback / lifetime) */}
       {estimate.investment && (
@@ -257,13 +283,11 @@ export default function SolarResults({ estimate, solarData, systemArea }: SolarR
               <span className="text-gray-600">System Capacity</span>
               <span className="font-semibold text-gray-900">{estimate.systemCapacityKw} kW</span>
             </div>
-            <div className="flex justify-between items-center py-3 border-b border-gray-100">
-              <span className="text-gray-600">Optimal Tilt Angle</span>
-              <span className="font-semibold text-gray-900">{Math.round(solarData.optimalTilt)}°</span>
-            </div>
-            <div className="flex justify-between items-center py-3 border-b border-gray-100">
-              <span className="text-gray-600">Optimal Azimuth</span>
-              <span className="font-semibold text-gray-900">{Math.round(solarData.optimalAzimuth)}°</span>
+            <div className="py-3 border-b border-gray-100">
+              <TiltAzimuthCompass
+                tiltDegrees={solarData.optimalTilt}
+                azimuthDegrees={solarData.optimalAzimuth}
+              />
             </div>
             <div className="flex justify-between items-center py-3">
               <span className="text-gray-600">Solar Irradiance</span>

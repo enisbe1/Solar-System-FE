@@ -6,6 +6,12 @@ import { Sun, MapPin, Settings, Calculator } from 'lucide-react';
 import ClientOnly from '@/components/ClientOnly';
 import SolarResults from '@/components/SolarResults';
 import QuickPresets from '@/components/QuickPresets';
+import ResultsSkeleton from '@/components/ResultsSkeleton';
+import Hero from '@/components/Hero';
+import HowItWorks from '@/components/HowItWorks';
+import InfoTooltip from '@/components/InfoTooltip';
+import TrustStrip from '@/components/TrustStrip';
+import SiteFooter from '@/components/SiteFooter';
 import { Location, SolarData, SystemSpecs, SolarEstimate } from '@/types/solar';
 import axios from 'axios';
 
@@ -117,32 +123,20 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Sun className="w-8 h-8 text-yellow-500" />
-              <h1 className="text-2xl font-bold text-gray-900">Solar Energy Calculator</h1>
-            </div>
-            <div className="hidden sm:block text-sm text-gray-600 ml-4">
-              Estimate your solar potential with precision
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Hero + How it works */}
+      <Hero />
+      <HowItWorks />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {!estimate ? (
           <div className="space-y-8">
-            {/* Instructions */}
+            {/* Section heading (the hero already pitched the product) */}
             <div className="text-center">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                Calculate Your Solar Energy Potential
+              <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
+                Let&apos;s analyse your roof
               </h2>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                Select your location on the map, enter your available space, and get detailed 
-                solar energy estimates with environmental and financial impact analysis.
+              <p className="text-sm text-gray-600 mt-1">
+                Steps 1–2 take about a minute. Everything happens in your browser.
               </p>
             </div>
 
@@ -207,7 +201,7 @@ export default function Home() {
                   {/* Available Area */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Available Area (m²) *
+                      Available Area (m²) * <InfoTooltip>The rooftop or land area available for panels. You can also draw the outline on the satellite map and the area is computed automatically.</InfoTooltip>
                     </label>
                     <input
                       type="number"
@@ -230,7 +224,7 @@ export default function Home() {
                   {/* Panel Efficiency */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Panel Efficiency (%)
+                      Panel Efficiency (%) <InfoTooltip>Percentage of incoming sunlight a panel converts to electricity. Modern crystalline-silicon panels sit around 20–22%.</InfoTooltip>
                     </label>
                     <input
                       type="number"
@@ -252,7 +246,7 @@ export default function Home() {
                   {/* System Losses */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      System Losses (%)
+                      System Losses (%) <InfoTooltip>Energy lost in the inverter, wiring, soiling and temperature effects. PVGIS uses 14% as the default reference.</InfoTooltip>
                     </label>
                     <input
                       type="number"
@@ -473,6 +467,9 @@ export default function Home() {
                 <p className="text-red-700">{error}</p>
               </div>
             )}
+
+            {/* Skeleton placeholder while the PVGIS call is in flight */}
+            {isLoading && !estimate && <ResultsSkeleton />}
           </div>
         ) : (
           /* Results Section */
@@ -500,18 +497,12 @@ export default function Home() {
             )}
 
             {solarData && (
-              <ClientOnly fallback={
-                <div className="flex items-center justify-center py-20">
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="text-sm text-gray-600 mt-2">Loading results...</p>
-                  </div>
-                </div>
-              }>
+              <ClientOnly fallback={<ResultsSkeleton />}>
                 <SolarResults
                   estimate={estimate}
                   solarData={solarData}
                   systemArea={systemSpecs.area}
+                  systemSpecs={systemSpecs}
                 />
               </ClientOnly>
             )}
@@ -519,20 +510,8 @@ export default function Home() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-gray-50 border-t mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center text-sm text-gray-600">
-            <p>
-              Solar data provided by PVGIS (Photovoltaic Geographical Information System) | 
-              Built with Next.js and Google Maps
-            </p>
-            <p className="mt-2">
-              Estimates are for reference only. Consult with solar professionals for accurate system design.
-            </p>
-          </div>
-        </div>
-      </footer>
+      <TrustStrip />
+      <SiteFooter />
     </div>
   );
 }
