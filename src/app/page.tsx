@@ -86,7 +86,6 @@ export default function Home() {
     setError(null);
 
     try {
-      console.log('selectedLocation', selectedLocation);
       // 1. Fetch solar irradiance data
       const solarResponse = await axios.get('/api/solar', {
         params: {
@@ -97,7 +96,6 @@ export default function Home() {
       });
 
       const fetchedSolarData: SolarData = solarResponse.data;
-      console.log('fetchedSolarData', fetchedSolarData);
       setSolarData(fetchedSolarData);
 
       // 2. Calculate solar estimate

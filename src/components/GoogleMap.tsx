@@ -87,15 +87,12 @@ export default function GoogleMap({
           streetViewControl: true,
           fullscreenControl: true,
           zoomControl: true,
-          restriction: {
-            latLngBounds: {
-              north: 71.0,  // Northern Norway
-              south: 34.0,  // Southern Cyprus/Crete
-              west: -25.0,  // Western Iceland
-              east: 45.0,   // Eastern Russia (European part)
-            },
-            strictBounds: false,
-          },
+          // No latLngBounds restriction — the calculator supports global
+          // coordinates (PVGIS is worldwide; regional factors cover EU, US,
+          // CN, IN, AU, BR and a world average). A hard Europe-only
+          // restriction caused autocomplete results from outside Europe to
+          // be visually clamped, decoupling marker position from the map
+          // viewport.
         });
 
         // Create the marker
@@ -132,8 +129,6 @@ export default function GoogleMap({
             const lat = event.latLng.lat();
             const lng = event.latLng.lng();
             
-            console.log('lat', lat);
-            console.log('lng', lng);
             markerInstance.setPosition(event.latLng);
             geocodeLocation(lat, lng);
           }
@@ -164,7 +159,6 @@ export default function GoogleMap({
             const place = autocompleteInstance.getPlace();
 
             if (!place.geometry || !place.geometry.location) {
-              console.log('No geometry for place:', place.name);
               return;
             }
 
@@ -172,15 +166,16 @@ export default function GoogleMap({
             const lng = place.geometry.location.lng();
 
             
-            // Update map and marker
+            // Move the marker first, then the map. We always setCenter to
+            // the picked place even when fitBounds is used — guarantees the
+            // map and the marker end up at the same place, even if the
+            // viewport bounds were degenerate or async-clamped.
+            markerInstance.setPosition(place.geometry.location);
             if (place.geometry.viewport) {
               mapInstance.fitBounds(place.geometry.viewport);
-            } else {
-              mapInstance.setCenter(place.geometry.location);
-              mapInstance.setZoom(17);
             }
-
-            markerInstance.setPosition(place.geometry.location);
+            mapInstance.setCenter(place.geometry.location);
+            if ((mapInstance.getZoom() ?? 0) < 12) mapInstance.setZoom(15);
 
             onLocationSelectRef.current({
               lat,
@@ -315,9 +310,14 @@ export default function GoogleMap({
     <div className="relative">
       {/* Search Input */}
       <div className="absolute top-3 left-3 z-10 w-80 max-w-[calc(100%-24px)]">
+        <label htmlFor="map-search" className="sr-only">
+          Search for a location on the map
+        </label>
         <input
+          id="map-search"
           ref={searchInputRef}
           type="text"
+          aria-label="Search for a location on the map"
           placeholder="Search for an address..."
           className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-gray-900 placeholder:text-gray-500"
         />
@@ -358,7 +358,9 @@ export default function GoogleMap({
 
       {/* Map Container */}
       <div 
-        ref={mapRef} 
+        ref={mapRef}
+        role="application"
+        aria-label="Interactive satellite map. Click anywhere to place a marker, drag the marker to fine-tune, or use the Draw roof outline button to trace your roof."
         style={{ height }}
         className="w-full rounded-lg overflow-hidden border shadow-md"
       />
