@@ -415,3 +415,56 @@ describe("calculateSolarEstimate — investment block", () => {
     expect(r.investment?.installationCostUsd).toBe(12000);
   });
 });
+
+
+describe("battery scenario monotonicity (used by BatteryComparison)", () => {
+  const solarData = {
+    location: { lat: 52.52, lng: 13.405 },
+    yearlyIrradiance: 1095,
+    yearlyYieldKwhPerKwp: 1100,
+    optimalTilt: 35,
+    optimalAzimuth: 180,
+  };
+  const baseSpecs = {
+    area: 50,
+    panelEfficiency: 22,
+    systemLosses: 14,
+    panelPower: 400,
+    panelArea: 2.0,
+  };
+
+  it("up-front cost strictly increases with battery size", () => {
+    const noB = calculateSolarEstimate(solarData, baseSpecs);
+    const sm  = calculateSolarEstimate(solarData, { ...baseSpecs, batteryKwh: 10 });
+    const lg  = calculateSolarEstimate(solarData, { ...baseSpecs, batteryKwh: 20 });
+    const c0 = noB.investment!.installationCostUsd;
+    const c1 = sm.investment!.installationCostUsd;
+    const c2 = lg.investment!.installationCostUsd;
+    expect(c1).toBeGreaterThan(c0);
+    expect(c2).toBeGreaterThan(c1);
+    // Battery cost is exactly $700/kWh in the lib
+    expect(c1 - c0).toBe(7000);
+    expect(c2 - c0).toBe(14000);
+  });
+
+  it("annual savings strictly increase with battery size", () => {
+    const noB = calculateSolarEstimate(solarData, baseSpecs);
+    const sm  = calculateSolarEstimate(solarData, { ...baseSpecs, batteryKwh: 10 });
+    const lg  = calculateSolarEstimate(solarData, { ...baseSpecs, batteryKwh: 20 });
+    // Going from 30% → 75% self-consumption boosts savings
+    expect(sm.financialSavings!.yearlySavings).toBeGreaterThan(
+      noB.financialSavings!.yearlySavings,
+    );
+    // 10 → 20 kWh keeps self-consumption at 75% (same tier) so savings
+    // shouldn't decrease.
+    expect(lg.financialSavings!.yearlySavings).toBeGreaterThanOrEqual(
+      sm.financialSavings!.yearlySavings,
+    );
+  });
+
+  it("scenarios are reproducible (pure functions)", () => {
+    const a = calculateSolarEstimate(solarData, { ...baseSpecs, batteryKwh: 10 });
+    const b = calculateSolarEstimate(solarData, { ...baseSpecs, batteryKwh: 10 });
+    expect(a).toEqual(b);
+  });
+});

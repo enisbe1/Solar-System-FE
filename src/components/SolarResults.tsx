@@ -5,6 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Sun, Zap, Leaf, DollarSign, MapPin, Calculator, TrendingUp, Wallet } from 'lucide-react';
 import PaybackTimeline from './PaybackTimeline';
 import MathBreakdown from './MathBreakdown';
+import BatteryComparison from './BatteryComparison';
 import TiltAzimuthCompass from './TiltAzimuthCompass';
 import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
 
@@ -106,6 +107,14 @@ export default function SolarResults({ estimate, solarData, systemArea, systemSp
 
       {/* Payback timeline — the headline business insight */}
       {estimate.investment && <PaybackTimeline estimate={estimate} />}
+
+      {/* Battery scenario comparison — should I add a battery? */}
+      {estimate.investment && systemSpecs && (
+        <BatteryComparison
+          solarData={solarData}
+          systemSpecs={systemSpecs}
+        />
+      )}
 
       {/* Show-the-math expandable panel — exposes the formulas behind each metric */}
       {systemSpecs && (
