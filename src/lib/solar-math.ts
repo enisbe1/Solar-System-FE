@@ -38,6 +38,9 @@ export const PVGIS_REFERENCE_LOSSES_PCT = 14;
 export const COST_PER_KWP_USD = 1650;
 export const COST_PER_KWH_BATTERY_USD = 700;
 export const DEFAULT_SELF_CONSUMPTION_NO_BATTERY = 0.30;
+/** @deprecated Legacy binary value (75%). Replaced by the smooth curve
+ *  in defaultSelfConsumption(batteryKwh, systemCapacityKwp). Kept for
+ *  backwards-compatible imports. */
 export const DEFAULT_SELF_CONSUMPTION_WITH_BATTERY = 0.75;
 export const DEFAULT_FEED_IN_FRACTION_OF_RETAIL = 0.30;
 export const PANEL_LIFETIME_YEARS = 25;
@@ -166,10 +169,42 @@ export function estimateInstallationCost(
   return Math.round(pvCost + batteryCost);
 }
 
-export function defaultSelfConsumption(batteryKwh: number = 0): number {
-  return batteryKwh > 0
-    ? DEFAULT_SELF_CONSUMPTION_WITH_BATTERY
-    : DEFAULT_SELF_CONSUMPTION_NO_BATTERY;
+/**
+ * Default self-consumption fraction, scaled smoothly with battery size.
+ *
+ * The previous binary model (30% without battery, 75% with any battery)
+ * broke down for large systems: a 10 kWh battery on a 1 MW PV array
+ * functionally adds no storage, yet the binary tier would claim 75%
+ * self-consumption — overstating savings by a factor of 2+ for the
+ * with-battery scenario.
+ *
+ * New model uses the battery-to-PV ratio in *hours of storage*
+ * (batteryKwh / systemCapacityKwp). Self-consumption follows an
+ * asymptotic curve:
+ *
+ *     pct = baseline + (ceiling - baseline) × (1 - e^(-k × hours))
+ *
+ * with:
+ *   baseline = 0.30 (no storage)
+ *   ceiling  = 0.95 (very large battery, time-shift dominates)
+ *   k = 0.55      (tuned so 1 h ≈ 58%, 2 h ≈ 74%, 4 h ≈ 89%)
+ *
+ * Callers can still pass batteryKwh=0 (returns baseline exactly), and the
+ * second argument defaults to 0 so any legacy call site continues to work
+ * (returns 30% in that case, matching the no-storage baseline).
+ */
+export function defaultSelfConsumption(
+  batteryKwh: number = 0,
+  systemCapacityKwp: number = 0,
+): number {
+  if (batteryKwh <= 0 || systemCapacityKwp <= 0) {
+    return DEFAULT_SELF_CONSUMPTION_NO_BATTERY;
+  }
+  const hours = batteryKwh / systemCapacityKwp;
+  const baseline = DEFAULT_SELF_CONSUMPTION_NO_BATTERY; // 0.30
+  const ceiling = 0.95;
+  const k = 0.55;
+  return baseline + (ceiling - baseline) * (1 - Math.exp(-k * hours));
 }
 
 export function splitYearlySavings(
@@ -262,7 +297,7 @@ export function calculateSolarEstimate(
   const selfConsumption =
     systemSpecs.selfConsumptionPct !== undefined
       ? Math.max(0, Math.min(1, systemSpecs.selfConsumptionPct))
-      : defaultSelfConsumption(batteryKwh);
+      : defaultSelfConsumption(batteryKwh, capacity);
 
   const { yearlySavings, selfConsumedKwh, exportedKwh } = splitYearlySavings(
     energy,

@@ -25,11 +25,38 @@ import { Battery, Check } from "lucide-react";
 import type { SolarData, SystemSpecs, SolarEstimate } from "@/types/solar";
 import { calculateSolarEstimate, COST_PER_KWH_BATTERY_USD } from "@/lib/solar-math";
 
-const BATTERY_SCENARIOS = [
-  { kwh: 0,  label: "No battery",                   blurb: "Grid-tied; exports surplus at the feed-in tariff." },
-  { kwh: 10, label: "+ 10 kWh battery",             blurb: "Typical residential battery; self-consumption ≈ 75%." },
-  { kwh: 20, label: "+ 20 kWh battery",             blurb: "Larger battery for high-consumption households." },
-] as const;
+/**
+ * Battery sizes are computed dynamically from the system's installed kWp
+ * so the comparison is meaningful at any scale (residential through
+ * utility). We pick three "hours of storage" tiers — ~30 min, 1 h and 2 h
+ * of system capacity — then snap to a round value so the UI stays clean.
+ */
+function snapToNice(value: number): number {
+  if (value <= 0) return 0;
+  const exponent = Math.floor(Math.log10(value));
+  const base = Math.pow(10, exponent);
+  const mantissa = value / base;
+  // Snap to 1, 2, 2.5, 5 of the relevant decade.
+  const snap = mantissa <= 1.5 ? 1
+            : mantissa <= 2.25 ? 2
+            : mantissa <= 3.5  ? 2.5
+            : mantissa <= 7.5  ? 5
+            : 10;
+  return Math.round(snap * base);
+}
+
+function computeBatteryScenarios(systemCapacityKwp: number) {
+  // Floors so tiny residential systems still see meaningful battery sizes.
+  const small  = Math.max(5,  snapToNice(systemCapacityKwp * 0.5));
+  const medium = Math.max(10, snapToNice(systemCapacityKwp * 1.0));
+  const large  = Math.max(20, snapToNice(systemCapacityKwp * 2.0));
+  return [
+    { kwh: 0,      label: "No battery",                      blurb: "Grid-tied; exports surplus at the feed-in tariff." },
+    { kwh: small,  label: `+ ${small.toLocaleString()} kWh battery`,  blurb: "Half-hour of system capacity; small storage buffer." },
+    { kwh: medium, label: `+ ${medium.toLocaleString()} kWh battery`, blurb: "≈ 1 hour of system capacity; typical right-sized battery." },
+    { kwh: large,  label: `+ ${large.toLocaleString()} kWh battery`,  blurb: "≈ 2 hours of capacity; larger high-self-consumption buffer." },
+  ];
+}
 
 interface Props {
   solarData: SolarData;
@@ -86,18 +113,25 @@ export default function BatteryComparison({ solarData, systemSpecs }: Props) {
   // Run the three calculations. Memoised because the inputs are objects —
   // we don't want to recompute on every parent render.
   const scenarios: ScenarioResult[] = useMemo(() => {
-    return BATTERY_SCENARIOS.map(({ kwh, label, blurb }) => ({
+    // Re-derive capacity from a no-battery estimate so the scenarios scale
+    // to the system size, not to a hard-coded 10/20 kWh assumption.
+    const baseline = calculateSolarEstimate(solarData, {
+      ...systemSpecs,
+      batteryKwh: 0,
+      selfConsumptionPct: undefined,
+      installationCostUsd: undefined,
+      batteryCostUsd: undefined,
+    });
+    const tiers = computeBatteryScenarios(baseline.systemCapacityKw);
+    return tiers.map(({ kwh, label, blurb }) => ({
       kwh,
       label,
       blurb,
       estimate: calculateSolarEstimate(solarData, {
         ...systemSpecs,
         batteryKwh: kwh,
-        // Drop user override of self-consumption so each scenario uses its
-        // own default (30% with no battery, 75% with one).
+        // Let defaultSelfConsumption do its smooth-curve thing.
         selfConsumptionPct: undefined,
-        // Also drop any one-off installation cost override so the battery
-        // delta is visible in the cost figure — the lib will re-estimate.
         installationCostUsd: undefined,
         batteryCostUsd: undefined,
       }),
@@ -141,7 +175,7 @@ export default function BatteryComparison({ solarData, systemSpecs }: Props) {
       </div>
 
       {/* Three scenario columns */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {scenarios.map((sc, i) => {
           const isRec = i === recIdx;
           const inv = sc.estimate.investment;

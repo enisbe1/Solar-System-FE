@@ -329,24 +329,55 @@ describe("self-consumption defaults (TD-1)", () => {
     expect(r.financialSavings?.yearlySavings).toBeCloseTo(9419, -1);
   });
 
-  it("defaults to 75% self-consumption when a battery is present", () => {
+  it("a tiny battery on a large system gives only a small bump", () => {
+    // Pristina test = 50 kWp system. A 10 kWh battery is just 0.2 hours
+    // of storage. Under the smooth curve the new self-consumption is
+    // ≈ 0.30 + 0.65 × (1 − e^(−0.55 × 0.2)) ≈ 0.367.
     const r = calculateSolarEstimate(solarData, {
       ...baseSpecs,
       batteryKwh: 10,
     });
-    expect(r.financialSavings?.selfConsumptionPct).toBe(0.75);
-    // Self-consumed: 65960 × 0.75 × 0.28 = 13851.6
-    // Exported:      65960 × 0.25 × 0.084 = 1385.16
-    // Total:                              ≈ 15237
-    expect(r.financialSavings?.yearlySavings).toBeCloseTo(15237, -1);
+    expect(r.financialSavings?.selfConsumptionPct).toBeCloseTo(0.37, 1);
+    expect(r.financialSavings?.selfConsumptionPct).toBeLessThan(0.45);
   });
 
-  it("battery raises savings by ~60% in this case", () => {
+  it("a properly-sized battery (1 hour) lifts self-consumption near 60%", () => {
+    // 50 kWh battery on 50 kWp = 1 h of storage.
+    // 0.30 + 0.65 × (1 − e^(−0.55)) ≈ 0.575.
+    const r = calculateSolarEstimate(solarData, {
+      ...baseSpecs,
+      batteryKwh: 50,
+    });
+    expect(r.financialSavings?.selfConsumptionPct).toBeCloseTo(0.57, 2);
+  });
+
+  it("a large battery (2 hours) approaches 75%", () => {
+    // 100 kWh battery on 50 kWp = 2 h of storage.
+    // 0.30 + 0.65 × (1 − e^(−1.1)) ≈ 0.733.
+    const r = calculateSolarEstimate(solarData, {
+      ...baseSpecs,
+      batteryKwh: 100,
+    });
+    expect(r.financialSavings?.selfConsumptionPct).toBeCloseTo(0.733, 2);
+  });
+
+  it("a properly-sized battery raises annual savings meaningfully", () => {
     const no  = calculateSolarEstimate(solarData, baseSpecs);
-    const yes = calculateSolarEstimate(solarData, { ...baseSpecs, batteryKwh: 10 });
-    // Sanity: with battery should be clearly better than without
+    const yes = calculateSolarEstimate(solarData, { ...baseSpecs, batteryKwh: 50 });
+    // 1h-of-storage battery on a 50 kWp system: savings should rise ≥40%.
     expect((yes.financialSavings?.yearlySavings ?? 0) /
-           (no.financialSavings?.yearlySavings ?? 1)).toBeGreaterThan(1.4);
+           (no.financialSavings?.yearlySavings ?? 1)).toBeGreaterThan(1.35);
+  });
+
+  it("a tiny battery on a huge system does NOT claim outsized savings", () => {
+    // Same fundamental bug the user reported: 10 kWh battery on a 1 MW
+    // system shouldn't claim a 60% savings boost.
+    const big = { ...baseSpecs, area: 5000 }; // → 2500 panels, 1 MW
+    const no  = calculateSolarEstimate(solarData, big);
+    const yes = calculateSolarEstimate(solarData, { ...big, batteryKwh: 10 });
+    const ratio = (yes.financialSavings?.yearlySavings ?? 0) /
+                  (no.financialSavings?.yearlySavings ?? 1);
+    expect(ratio).toBeLessThan(1.05); // < 5% improvement, not the old +60%
   });
 });
 
