@@ -1,5 +1,7 @@
 # Solar Energy Calculator
 
+**Live demo:** [solar-system-fe.vercel.app](https://solar-system-fe.vercel.app/) · **Source:** [github.com/enisbe1/Solar-System-FE](https://github.com/enisbe1/Solar-System-FE)
+
 A comprehensive single-page application (SPA) for estimating solar energy potential based on location and system specifications. Built with Next.js, TypeScript, and Google Maps integration.
 
 ## ✨ Features

@@ -12,7 +12,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const SITE_URL = "https://solar-system-fe.vercel.app"; // update after deploy
+const SITE_URL = "https://solar-system-fe.vercel.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
